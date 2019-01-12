@@ -13,5 +13,6 @@ from django.urls import path
 from principalApp import views
 
 urlpatterns = [
-    path('', views.index),
+    path('', views.index, name='index'),
+    path('form', views.form, name='form'),
 ]
