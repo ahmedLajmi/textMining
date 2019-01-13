@@ -28,17 +28,35 @@ def index(request):
 def form(request):
     results = []
     if request.method == 'POST':
-        if request.FILES["file"] is not None:
+        print(request.FILES)
+        if "file" in request.FILES:
             with open(os.path.join(BASE_DIR, 'test.txt'), 'wb+') as destination:
                 for chunk in request.FILES["file"].chunks():
                     destination.write(chunk)
-            with open(os.path.join(BASE_DIR, 'test.txt'), 'r', encoding="utf-8") as destination:
-                for line in destination:
-                    results.append({"line": line, "lang": nb_model.predict(bow_model_char.transform([cleanup_text(line)]))[0]})
+        else:
+            with open(os.path.join(BASE_DIR, 'test.txt'), 'wb+') as destination:
+                destination.write(request.POST["manuel"].encode('utf-8'))
+        with open(os.path.join(BASE_DIR, 'test.txt'), 'r', encoding="utf-8") as destination:
+            for line in destination:
+                clean_text = cleanup_text(line)
+                if clean_text == '':
+                    results.append({"line": line, "lang": "Other", "proba": "null"})
+                else:
+                    text = bow_model_char.transform([clean_text])
+                    proba = nb_model.predict_proba(text)[0]
+                    if (proba[0] <= 0.80 and (proba[1] >= 0.15 and proba[1] <= 0.22)):
+                        lang = "Other"
+                    else:
+                        if nb_model.predict(text)[0] == "ARA":
+                            lang = "Arabic"
+                        else:
+                            lang = "Tunisian"
+                    results.append({"line": line, "lang": lang, "proba":proba })
     return render(request, 'result.html',{"results":results})
 
 def cleanup_text(text):
     cpt = 0
+    cpt1 = 0
     text = re.sub('((www\.[^\s]+)|(https?://[^\s]+))', '', text)
     text = re.sub('@[^\s]+', '', text)
     if re.search("&#",text):
@@ -52,10 +70,13 @@ def cleanup_text(text):
     for c in text:
         if c >= '0' and c <= '9':
             cpt = cpt + 1
-    if cpt > 0.4 * len(text):
+        if (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z'):
+            cpt1 = cpt1 + 1
+    if (cpt > 0.4 * len(text)) or (cpt1 > 0.5 * len(text)):
         text = ''
     if len(text) < 10:
         text = ''
+
     return text
 
 def test(request):
