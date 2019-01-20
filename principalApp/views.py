@@ -22,6 +22,9 @@ two_plus_words_RE = re.compile(r"(\w+\s+)\1{1,}", re.DOTALL)
 with open('model.pkl', 'rb') as file:
     nb_model, bow_model_char = pickle.load(file)
 
+with open('model2.pkl', 'rb') as file2:
+    NB_model, bow_model_ara, NB_model_tun, bow_model_tun = pickle.load(file2)
+
 def index(request):
     return render(request, 'index.html')
 
@@ -39,10 +42,13 @@ def form(request):
         with open(os.path.join(BASE_DIR, 'test.txt'), 'r', encoding="utf-8") as destination:
             for line in destination:
                 clean_text = cleanup_text(line)
+                norma_text = norm_text(clean_text)
+                stemmer = ArabicStemmer()
+                stem_text = stemmer.stem(norma_text)
                 if clean_text == '':
-                    results.append({"line": line, "lang": "Other", "proba": "null"})
+                    results.append({"line": line, "lang": "Other", "proba": "Unknown"})
                 else:
-                    text = bow_model_char.transform([clean_text])
+                    text = bow_model_char.transform([stem_text])
                     proba = nb_model.predict_proba(text)[0]
                     if (proba[0] <= 0.80 and (proba[1] >= 0.15 and proba[1] <= 0.22)):
                         lang = "Other"
@@ -51,7 +57,8 @@ def form(request):
                             lang = "Arabic"
                         else:
                             lang = "Tunisian"
-                    results.append({"line": line, "lang": lang, "proba":proba })
+                    sentiment = sentimentAnalyse(lang,stem_text)
+                    results.append({"line": line, "lang": lang, "proba":sentiment })
     return render(request, 'result.html',{"results":results})
 
 def cleanup_text(text):
@@ -79,13 +86,26 @@ def cleanup_text(text):
 
     return text
 
-def test(request):
-    result = []
-    if request.method == 'POST':
-        if request.FILES["file"] is not None:
-            with open(os.path.join(BASE_DIR, 'test.txt'), 'wb+') as destination:
-                for chunk in request.FILES["file"].chunks():
-                    destination.write(chunk)
-            with open(os.path.join(BASE_DIR, 'test.txt'), 'r', encoding="utf-8") as destination:
-                for line in destination:
-                    result.append({"line":line,"lang":nb_model.predict(bow_model_char.transform([cleanup_text(line)]))})
+def norm_text(text):
+    text = re.sub(r'[أءؤاٍ]','ا',text)
+    text = re.sub('ظ', 'ض', text)
+    text = re.sub('ة', 'ت', text)
+    return text
+
+def sentimentAnalyse(language,text):
+    if (language == "Arabic"):
+        emotion = NB_model.predict_proba(bow_model_ara.transform([text]))[0]
+        if (emotion[0] < 0.6 and emotion[0] > 0.4):
+            return "Neutre"
+        elif (emotion[0] >= 0.6):
+            return "Negative"
+        else:
+            return "Positive"
+    else:
+        emotion = NB_model_tun.predict_proba(bow_model_tun.transform([text]))[0]
+        if (emotion[0] < 0.6 and emotion[0] > 0.4):
+            return "Neutre"
+        elif (emotion[0] >= 0.6):
+            return "Negative"
+        else:
+            return "Positive"
