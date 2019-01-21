@@ -15,4 +15,5 @@ from principalApp import views
 urlpatterns = [
     path('', views.index, name='index'),
     path('form', views.form, name='form'),
+    path('download', views.download, name='download'),
 ]
