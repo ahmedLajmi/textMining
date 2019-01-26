@@ -33,28 +33,32 @@ def index(request):
     return render(request, 'index.html')
 
 def form(request):
+    file_name = ""
     results = []
     if request.method == 'POST':
         if "file" in request.FILES:
             with open(os.path.join(BASE_DIR, 'test.txt'), 'wb+') as destination:
                 for chunk in request.FILES["file"].chunks():
                     destination.write(chunk)
+            file_name = 'result_' + request.FILES["file"].name
         else:
             with open(os.path.join(BASE_DIR, 'test.txt'), 'wb+') as destination:
                 destination.write(request.POST["manuel"].encode('utf-8'))
-        with open(os.path.join(BASE_DIR, 'result.txt'), 'w',encoding="utf-8") as result_file:
+            file_name = "result.txt"
+        with open(os.path.join(BASE_DIR, file_name), 'w',encoding="utf-8") as result_file:
             cpt = 1
             with open(os.path.join(BASE_DIR, 'test.txt'), 'r', encoding="utf-8") as destination:
                 for line in destination:
                     if (line != ''):
-                        print(line)
                         clean_text = cleanup_text(line)
                         norma_text = norm_text(clean_text)
                         stemmer = ArabicStemmer()
                         stem_text = stemmer.stem(norma_text)
 
-                        if ((clean_text == 'barcha nwamer') or (clean_text == 'barcha latin')):
-                            results.append({"line": line, "lang": "Other", "proba": "Unknown"})
+                        if ((clean_text == 'barcha nwamer') or (clean_text == 'barcha latin') or (clean_text == "")):
+                            lang = "Other"
+                            sentiment = "Unknown"
+                            results.append({"line": line, "lang": lang, "proba": sentiment})
                         else:
                             text = bow_model_char.transform([stem_text])
                             proba = nb_model.predict_proba(text)[0]
@@ -67,12 +71,15 @@ def form(request):
                                     lang = "Tunisian"
                             sentiment = sentimentAnalyse(lang,stem_text)
                             results.append({"line": line, "lang": lang, "proba":sentiment })
-                    result_file.write("Line n : " + str(cpt) + " : \n " + line + "\n" )
-                    result_file.write("\t Language : " + lang + "\n")
-                    result_file.write("\t Sentiment : " + sentiment + "\n")
+                    elif (line == "\n"):
+                        lang = "Other"
+                        sentiment = "Unknown"
+                    result_file.write("Line n " + str(cpt) + " : " + line.rstrip() + "\t" )
+                    result_file.write("Language : " + lang + " ; \t")
+                    result_file.write("Sentiment : " + sentiment + "\n")
                     cpt += 1
 
-    return render(request, 'result.html',{"results":results})
+    return render(request, 'result.html',{"results":results, "file_name":file_name})
 
 def cleanup_text(text):
     cpt = 0
@@ -124,16 +131,15 @@ def sentimentAnalyse(language,text):
         else:
             return "Positive"
 
-def download(request):
-    file_path = os.path.join(BASE_DIR, 'result.txt',)
+def download(request,file_name):
+    file_path = os.path.join(BASE_DIR, file_name)
 
     if os.path.exists(file_path):
-        with open(os.path.join(BASE_DIR, 'result.txt'), 'rb') as destination:
+        with open(file_path, 'rb') as destination:
             response = HttpResponse(
                 destination.read(),
                 content_type='application/force-download')  # mimetype is replaced by content_type for django 1.7
-            response['Content-Disposition'] = 'attachment; filename=%s' % smart_str("result.txt")
-
+            response['Content-Disposition'] = 'attachment; filename=%s' % smart_str(file_name)
             response['X-Sendfile'] = smart_str(file_path)
             # It's usually a good idea to set the 'Content-Length' header too.
             # You can also set any other required headers: Cache-Control, etc.
